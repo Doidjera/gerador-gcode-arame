@@ -1,10 +1,9 @@
 import streamlit as st
-import matplotlib.pyplot as plt
 import numpy as np
+import plotly.graph_objects as go
 
-st.set_page_config(page_title="Gerador de Código G com Visualização", layout="centered")
-
-st.title("🧰 Gerador de Código G com Visualização da Dobra")
+st.set_page_config(page_title="Gerador de Código G 3D", layout="centered")
+st.title("🧰 Gerador de Código G com Visualização 3D")
 
 if "instrucoes" not in st.session_state:
     st.session_state.instrucoes = []
@@ -12,35 +11,47 @@ if "instrucoes" not in st.session_state:
 if "edit_index" not in st.session_state:
     st.session_state.edit_index = None
 
-# Função para gerar visualização do arame
-def desenhar_arame(instrucoes):
-    x, y = [0], [0]
-    angulo_atual = 0
+# VISUALIZAÇÃO 3D
+def desenhar_arame_3d(instrucoes):
+    x, y, z = [0], [0], [0]
+    angulo = 0
+    altura = 0  # você pode mudar isso para simular mudanças no eixo Z
 
-    for ang, dist, dir_ in instrucoes:
-        if dir_ == "anti-horário":
-            angulo_atual += ang
+    for ang, dist, direcao in instrucoes:
+        if direcao == "anti-horário":
+            angulo += ang
         else:
-            angulo_atual -= ang
+            angulo -= ang
 
-        rad = np.radians(angulo_atual)
+        rad = np.radians(angulo)
         dx = dist * np.cos(rad)
         dy = dist * np.sin(rad)
 
         x.append(x[-1] + dx)
         y.append(y[-1] + dy)
+        z.append(altura)
 
-    fig, ax = plt.subplots()
-    ax.plot(x, y, '-o', color='steelblue')
-    ax.set_aspect('equal')
-    ax.set_title("Visualização das dobras")
-    ax.grid(True)
-    st.pyplot(fig)
+    fig = go.Figure()
+    fig.add_trace(go.Scatter3d(
+        x=x, y=y, z=z,
+        mode='lines+markers',
+        line=dict(color='royalblue', width=5),
+        marker=dict(size=4)
+    ))
+    fig.update_layout(
+        margin=dict(l=0, r=0, b=0, t=30),
+        scene=dict(
+            xaxis_title='X',
+            yaxis_title='Y',
+            zaxis_title='Z',
+            aspectmode='data'
+        ),
+        title="Visualização 3D das dobras"
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
-
-# Formulário de instrução
+# FORMULÁRIO
 st.subheader("➕ Adicionar Instrução")
-
 with st.form("form_dobra"):
     col1, col2 = st.columns(2)
     with col1:
@@ -60,19 +71,14 @@ with st.form("form_dobra"):
             st.success("✏️ Instrução editada!")
             st.session_state.edit_index = None
 
-
-# Mostrar instruções com opções de editar/apagar
+# LISTA DE INSTRUÇÕES
 st.subheader("📋 Instruções")
-
 for i, (ang, dist, dir_) in enumerate(st.session_state.instrucoes):
     col1, col2, col3 = st.columns([4, 1, 1])
     with col1:
         st.markdown(f"**{i+1}.** Distância: `{dist} mm`, Ângulo: `{ang}°`, Direção: `{dir_}`")
     with col2:
         if st.button("✏️", key=f"edit_{i}"):
-            angulo = ang
-            distancia = dist
-            direcao = dir_
             st.session_state.edit_index = i
     with col3:
         if st.button("❌", key=f"delete_{i}"):
@@ -80,11 +86,11 @@ for i, (ang, dist, dir_) in enumerate(st.session_state.instrucoes):
             st.experimental_rerun()
 
 if st.session_state.instrucoes:
-    desenhar_arame(st.session_state.instrucoes)
+    desenhar_arame_3d(st.session_state.instrucoes)
 else:
-    st.info("Adicione instruções para ver a visualização.")
+    st.info("Adicione instruções para visualizar em 3D.")
 
-# Geração de Código G
+# G-CODE
 def gerar_codigo_g(instrs):
     linhas = ["; Código G gerado para dobras de arame"]
     for i, (ang, dist, dir_) in enumerate(instrs, 1):
