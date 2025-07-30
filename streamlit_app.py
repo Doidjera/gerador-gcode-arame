@@ -2,8 +2,8 @@ import streamlit as st
 import numpy as np
 import plotly.graph_objects as go
 
-st.set_page_config(page_title="Dobrador de Arame 3D", layout="centered")
-st.title("🧰 Dobrador de Arame com Operações Separadas (Corrigido)")
+st.set_page_config(page_title="Dobrador de Arame 3D - Com Código G avançado", layout="centered")
+st.title("🧰 Dobrador de Arame - Visualização com final na origem e Código G Estilo MIOLO")
 
 if "operacoes" not in st.session_state:
     st.session_state.operacoes = []
@@ -11,10 +11,9 @@ if "operacoes" not in st.session_state:
 if "edit_index" not in st.session_state:
     st.session_state.edit_index = None
 
-# Visualização 3D considerando direção acumulada
 def desenhar_arame_3d(operacoes):
     x, y, z = [0], [0], [0]
-    angulo = 0  # direção inicial
+    angulo = 0
 
     for op in operacoes:
         if op["tipo"] == "alimentar":
@@ -24,13 +23,19 @@ def desenhar_arame_3d(operacoes):
             dy = dist * np.sin(rad)
             x.append(x[-1] + dx)
             y.append(y[-1] + dy)
-            z.append(z[-1])  # sem alteração no Z
+            z.append(z[-1])
         elif op["tipo"] == "dobrar":
             delta = op["angulo"]
             if op["direcao"] == "anti-horário":
                 angulo += delta
             else:
                 angulo -= delta
+
+    # Deslocar para que o final esteja na origem
+    final_x, final_y, final_z = x[-1], y[-1], z[-1]
+    x = [xi - final_x for xi in x]
+    y = [yi - final_y for yi in y]
+    z = [zi - final_z for zi in z]
 
     fig = go.Figure()
     fig.add_trace(go.Scatter3d(
@@ -47,13 +52,12 @@ def desenhar_arame_3d(operacoes):
             zaxis_title='Z',
             aspectmode='data'
         ),
-        title="Visualização 3D do Arame"
+        title="Visualização 3D do Arame (final na origem)"
     )
     st.plotly_chart(fig, use_container_width=True)
 
-# Adição de nova operação
+# Interface para adicionar operação
 st.subheader("➕ Adicionar Nova Operação")
-
 tipo_operacao = st.radio("Tipo da operação:", ["alimentar", "dobrar"], horizontal=True)
 
 with st.form("form_operacao"):
@@ -103,22 +107,43 @@ if st.session_state.operacoes:
 else:
     st.info("Adicione operações para visualizar o arame.")
 
-# G-CODE
-def gerar_codigo_g(operacoes):
-    linhas = ["; Código G gerado para dobras de arame"]
-    for i, op in enumerate(operacoes, 1):
-        linhas.append(f"\n; Operação {i}")
+# G-CODE personalizado
+def gerar_codigo_g_custom(operacoes):
+    linhas = []
+    linhas.append(";MIOLO DOBRA DE ARAME CUSTOMIZADO")
+    linhas.append("G92 X0")
+    linhas.append("G55")
+    linhas.append("G92 X0")
+    linhas.append("G0 X0 Y0 Z0 A0")
+
+    alim_count = 0
+    dobra_count = 0
+
+    for op in operacoes:
         if op["tipo"] == "alimentar":
-            linhas.append(f"G1 X{op['distancia']:.2f}")
+            alim_count += 1
+            linhas.append(f"G91 X{op['distancia']:.0f}; ALIM {alim_count:02d} {int(op['distancia'])}MM")
+            linhas.append("G90")
         else:
-            direcao = "G3" if op["direcao"] == "anti-horário" else "G2"
-            linhas.append(f"{direcao} A{op['angulo']:.2f}")
+            dobra_count += 1
+            # Dobras para baixo: Z negativo, usando G0 Z-
+            # Dobras para cima: G55 com Z positivo? No seu exemplo, G55 ativo no começo, dobrar para cima parece Z positivo
+            z_val = -abs(int(op['angulo'])) if op["direcao"] == "anti-horário" else abs(int(op['angulo']))
+            linhas.append(f"G0 Z{z_val}; DOBRA {dobra_count:02d} {int(op['angulo'])}GRAUS")
+            linhas.append("G0 Z0")
+
+    # Finalização básica (você pode adaptar)
+    linhas.append("M3")
+    linhas.append("M5")
+    linhas.append("G0 Y0")
+    linhas.append("M30")
+
     return "\n".join(linhas)
 
-if st.button("📄 Gerar Código G"):
-    codigo = gerar_codigo_g(st.session_state.operacoes)
-    st.text_area("📄 Código G", value=codigo, height=300)
-    st.download_button("📥 Baixar Código G", codigo, file_name="dobras_arame.gcode")
+if st.button("📄 Gerar Código G (Customizado)"):
+    codigo = gerar_codigo_g_custom(st.session_state.operacoes)
+    st.text_area("📄 Código G Customizado", value=codigo, height=400)
+    st.download_button("📥 Baixar Código G", codigo, file_name="dobras_arame_custom.gcode")
 
 if st.button("🗑️ Limpar tudo"):
     st.session_state.operacoes = []
